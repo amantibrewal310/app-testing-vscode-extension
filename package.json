@@ -9,13 +9,15 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onCommand:app-testing-vscode-extension.showEmulator"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "app-testing-vscode-extension.helloWorld",
-        "title": "Hello World"
+        "command": "app-testing-vscode-extension.showEmulator",
+        "title": "Show Android Emulator"
       }
     ]
   },

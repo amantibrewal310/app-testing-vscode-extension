@@ -1,26 +1,128 @@
-// The module 'vscode' contains the VS Code extensibility API
-// Import the module and reference it with the alias vscode in your code below
-import * as vscode from 'vscode';
+import * as vscode from "vscode";
+import * as child_process from "child_process";
+import * as path from "path";
 
-// This method is called when your extension is activated
-// Your extension is activated the very first time the command is executed
+let emulatorPanel: vscode.WebviewPanel | undefined;
+let screenshotInterval: NodeJS.Timeout | undefined;
+
 export function activate(context: vscode.ExtensionContext) {
+  console.log("Android Emulator Extension is now active");
 
-	// Use the console to output diagnostic information (console.log) and errors (console.error)
-	// This line of code will only be executed once when your extension is activated
-	console.log('Congratulations, your extension "app-testing-vscode-extension" is now active!');
+  let showEmulatorCommand = vscode.commands.registerCommand(
+    "app-testing-vscode-extension.showEmulator",
+    () => {
+      if (emulatorPanel) {
+        emulatorPanel.reveal();
+        return;
+      }
 
-	// The command has been defined in the package.json file
-	// Now provide the implementation of the command with registerCommand
-	// The commandId parameter must match the command field in package.json
-	const disposable = vscode.commands.registerCommand('app-testing-vscode-extension.helloWorld', () => {
-		// The code you place here will be executed every time your command is executed
-		// Display a message box to the user
-		vscode.window.showInformationMessage('Hello World from app-testing-vscode-extension!');
-	});
+      emulatorPanel = vscode.window.createWebviewPanel(
+        "androidEmulator",
+        "Android Emulator",
+        vscode.ViewColumn.Two,
+        {
+          enableScripts: true,
+          retainContextWhenHidden: true,
+        }
+      );
 
-	context.subscriptions.push(disposable);
+      emulatorPanel.webview.html = getWebviewContent();
+
+      emulatorPanel.onDidDispose(
+        () => {
+          emulatorPanel = undefined;
+          if (screenshotInterval) {
+            clearInterval(screenshotInterval);
+            screenshotInterval = undefined;
+          }
+        },
+        null,
+        context.subscriptions
+      );
+
+      updateEmulatorScreen();
+      screenshotInterval = setInterval(updateEmulatorScreen, 2000);
+    }
+  );
+
+  context.subscriptions.push(showEmulatorCommand);
 }
 
-// This method is called when your extension is deactivated
-export function deactivate() {}
+function getWebviewContent() {
+  return `<!DOCTYPE html>
+	<html>
+	<head>
+		<style>
+			body {
+				padding: 0;
+				margin: 0;
+				background: #1e1e1e;
+				display: flex;
+				justify-content: center;
+				align-items: center;
+				height: 100vh;
+			}
+			#emulator-screen {
+				max-width: 100%;
+				max-height: 100vh;
+				object-fit: contain;
+			}
+		</style>
+	</head>
+	<body>
+		<img id="emulator-screen" src="" alt="Android Emulator Screen">
+		<script>
+			const vscode = acquireVsCodeApi();
+			window.addEventListener('message', event => {
+				const message = event.data;
+				if (message.type === 'updateScreen') {
+					document.getElementById('emulator-screen').src = message.imageData;
+				}
+			});
+		</script>
+	</body>
+	</html>`;
+}
+
+async function updateEmulatorScreen() {
+  if (!emulatorPanel) {
+    return;
+  }
+
+  try {
+    const screenshot = child_process.execSync("adb exec-out screencap -p", {
+      encoding: "base64",
+      maxBuffer: 25 * 1024 * 1024, // 25MB buffer
+    });
+    const imageData = `data:image/png;base64,${screenshot}`;
+
+    // Send to webview
+    if (emulatorPanel?.visible) {
+      emulatorPanel.webview.postMessage({
+        type: "updateScreen",
+        imageData,
+      });
+    }
+  } catch (error) {
+    console.error("Failed to capture emulator screen:", error);
+
+    // Show error only if panel is visible
+    if (emulatorPanel?.visible) {
+      vscode.window.showErrorMessage(
+        "Failed to capture Android emulator screen. Make sure the emulator is running and ADB is available."
+      );
+    }
+
+    if (screenshotInterval) {
+      clearInterval(screenshotInterval);
+      screenshotInterval = undefined;
+    }
+  }
+}
+
+export function deactivate() {
+  if (screenshotInterval) {
+    clearInterval(screenshotInterval);
+    screenshotInterval = undefined;
+  }
+}
