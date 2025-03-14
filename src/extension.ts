@@ -31,27 +31,33 @@ export function activate(context: vscode.ExtensionContext) {
       // Handle messages from the webview
       emulatorPanel.webview.onDidReceiveMessage(
         async (message) => {
-          if (message.type === 'runScript') {
+          if (message.type === "runScript") {
             if (!emulatorPanel) return;
 
-            const commands = message.script.split('\n')
+            const commands = message.script
+              .split("\n")
               .map((line: string) => line.trim())
-              .filter((line: string) => line && !line.startsWith('//')); // Remove empty lines and comments
+              .filter((line: string) => line && !line.startsWith("//")); // Remove empty lines and comments
 
             for (const command of commands) {
               try {
-                const output = child_process.execSync(command, { encoding: 'utf8' });
+                const output = child_process.execSync(command, {
+                  encoding: "utf8",
+                });
                 emulatorPanel.webview.postMessage({
-                  type: 'scriptOutput',
+                  type: "scriptOutput",
                   output: `✓ ${command}\n${output}`,
-                  error: false
+                  error: false,
                 });
               } catch (error: unknown) {
-                const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+                const errorMessage =
+                  error instanceof Error
+                    ? error.message
+                    : "Unknown error occurred";
                 emulatorPanel.webview.postMessage({
-                  type: 'scriptOutput',
+                  type: "scriptOutput",
                   output: `✗ ${command}\n${errorMessage}`,
-                  error: true
+                  error: true,
                 });
               }
             }
